@@ -2,9 +2,6 @@
 name: Manual
 
 "on":
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       version:
@@ -17,7 +14,6 @@ name: Manual
         type: string
 
 jobs:
-  # Check if this commit should trigger a release
   console-build:
     name: Console Build & Typecheck
     permissions:
@@ -193,63 +189,3 @@ jobs:
           name: pilot-darwin-arm64
           path: launcher/dist/pilot-darwin-arm64.so
           retention-days: 1
-
-  # Manual approval gate - displays version and changelog, waits for approval
-  approve-release:
-    name: Approve Release
-    permissions:
-      contents: read
-    runs-on: ubuntu-latest
-    needs:
-      - prepare-release
-      - python-tests
-      - console-tests
-      - console-build
-      - build-pilot-x86
-      - build-pilot-arm64
-      - build-pilot-darwin-x86
-      - build-pilot-darwin-arm64
-      - security-scan
-    if: needs.prepare-release.outputs.should_release == 'true'
-    environment: production
-    steps:
-      - name: Display release details for approval
-        env:
-          CHANGELOG_CONTENT: ${{ needs.prepare-release.outputs.changelog }}
-        run: |
-          cat >> $GITHUB_STEP_SUMMARY << SUMMARY
-          ## 🚀 Release Approval Required
-
-          ### Version Bump
-          | Current | → | New |
-          |---------|---|-----|
-          | v${{ needs.prepare-release.outputs.current_version }} | → | **v${{ needs.prepare-release.outputs.version }}** |
-
-          ### Build Status
-          - ✅ Security scan (Trivy) passed
-          - ✅ Python unit tests passed
-          - ✅ Console unit tests passed
-          - ✅ Console build & typecheck passed
-          - ✅ Linux x86_64 build ready
-          - ✅ Linux arm64 build ready
-          - ✅ Darwin x86_64 build ready
-          - ✅ Darwin arm64 build ready
-
-          ### Changelog for v${{ needs.prepare-release.outputs.version }}
-
-          SUMMARY
-
-          # Write changelog safely via environment variable
-          printf '%s\n' "$CHANGELOG_CONTENT" >> $GITHUB_STEP_SUMMARY
-
-          cat >> $GITHUB_STEP_SUMMARY << 'SUMMARY'
-
-          ---
-          **Approve this deployment to publish the release.**
-          SUMMARY
-
-      - name: Release approved
-        run: |
-          echo "✅ Release v${{ needs.prepare-release.outputs.version }} approved!"
-          echo "Proceeding to publish..."
-
